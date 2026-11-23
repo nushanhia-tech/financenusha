@@ -60,7 +60,7 @@ Open `http://localhost:3000`. Sign in as `treasurer@nusha.test`, `secretary@nush
 
    Confirm both profiles appear in `public.users`. For high-value transactions under maker-checker, assign a second eligible reviewer using one of the two finance roles, or configure the approval policy according to the union’s governance. Two approvals require two distinct reviewers. With maker-checker enabled, neither can be the creator.
 
-4. In Vercel, import `financenusha-cloud/nushafinance`. Select Next.js, use the repository root, and keep the default `npm run build`. Set the production values for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `APP_ORIGIN`. The secret key belongs only in Vercel’s server-side environment. `DEMO_PASSWORD` is local only. Deploy and verify the sign-in screen at the final domain.
+4. In Vercel, import `nushanhia-tech/financenusha`. Select Next.js, use the repository root, and keep the default `npm run build`. Set the production values for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `APP_ORIGIN`. The secret key belongs only in Vercel’s server-side environment. `DEMO_PASSWORD` is local only. Deploy and verify the sign-in screen at the final domain.
 
 5. Sign in as an officer, create and activate the academic year, then configure accounts and any verified opening balances. Add members and send their invitations from the Members page. To require administrator MFA, enroll an authenticator, complete a challenge, and enable the requirement in Settings.
 
