@@ -2,16 +2,14 @@
 
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
-import { toDataURL } from "qrcode";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { authOperation, authenticate, configuration, databaseFor, serviceDatabase } from "@/lib/finance-auth";
 import { hashPassword } from "@/lib/passwords";
-import { decryptTotp, encryptTotp, newTotpSecret, validTotpCounter } from "@/lib/totp";
 import { clearSessionCookie, session, sessionDigest, setSessionCookie } from "@/lib/session";
 import { authInput, commands, newPassword, parseCsv, trustedFileType, type Command } from "@/lib/validation";
 
-export type ActionResult = { error?: string; message?: string; id?: string; qr?: string; secret?: string; username?: string; temporaryPassword?: string };
+export type ActionResult = { error?: string; message?: string; id?: string; username?: string; temporaryPassword?: string };
 const privateKinds = new Set<Command>(["profile_update","proof_submit","notification_read"]);
 const rpcError = (error: { message: string; code?: string }) => {
   if (error.code === "23505") return "A record with the same name, reference, or approval already exists.";
@@ -140,32 +138,4 @@ export async function changePassword(_previous: ActionResult,form: FormData): Pr
   if(!changed)return {error:"Sign in again with your current temporary password."};
   await clearSessionCookie();
   redirect("/login?notice=password");
-}
-
-export async function enrollFactor(): Promise<ActionResult> {
-  const current=await session();
-  if(!current||current.profile.role==="MEMBER"||current.profile.must_change_password)return {error:"Administrator account required."};
-  const stored=await authOperation<{secret:string}>(serviceDatabase(),"totp_begin",{
-    token_hash:current.tokenHash,secret:encryptTotp(newTotpSecret()),
-  });
-  if(!stored)return {error:"An authenticator is already enrolled or the session expired."};
-  const secret=decryptTotp(stored.secret);
-  const label=encodeURIComponent("NUSHA Finance:"+current.profile.username);
-  const params=new URLSearchParams({secret,issuer:"NUSHA Finance"});
-  return {secret,qr:await toDataURL("otpauth://totp/"+label+"?"+params.toString())};
-}
-
-export async function verifyFactor(_previous: ActionResult,form: FormData): Promise<ActionResult> {
-  const current=await session();
-  if(!current||current.profile.role==="MEMBER"||current.profile.must_change_password)return {error:"Administrator account required."};
-  const code=String(form.get("code")||"");
-  if(!/^\d{6}$/.test(code))return {error:"Enter the six-digit authenticator code."};
-  const db=serviceDatabase();
-  const stored=await authOperation<{secret?:string;limited?:boolean}>(db,"totp_lookup",{token_hash:current.tokenHash});
-  if(stored?.limited)return {error:"Too many attempts. Try again later."};
-  const counter=stored?.secret?validTotpCounter(decryptTotp(stored.secret),code):null;
-  if(counter===null)return {error:"The authenticator code could not be verified."};
-  const verified=await authOperation(db,"totp_confirm",{token_hash:current.tokenHash,secret:stored!.secret,counter});
-  if(!verified)return {error:"Use a fresh authenticator code."};
-  redirect("/admin");
 }

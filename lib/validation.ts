@@ -46,8 +46,9 @@ export const commands = {
   budget_revise:z.object({...ids,amount:positive,reason}),budget_decide:z.object({...ids,decision}),
   document_add:z.object({...document,transaction_id:optionalId,pledge_id:optionalId,kind:z.enum(["bill","voucher","receipt","sponsorship"])}),
   profile_update:z.object({phone}), notification_read:z.object(base),
-  settings_save:z.object({approval_threshold:decimal,high_threshold:decimal,maker_checker:bool,mfa_required:bool,budget_warning:positive})
-    .refine(p=>Number(p.high_threshold)>=Number(p.approval_threshold) && Number(p.budget_warning)<=100,"Check the approval thresholds and budget warning percentage."),
+  settings_save:z.object({approval_threshold:decimal,high_threshold:decimal,maker_checker:bool,budget_warning:positive})
+    .refine(p=>Number(p.high_threshold)>=Number(p.approval_threshold) && Number(p.budget_warning)<=100,"Check the approval thresholds and budget warning percentage.")
+    .transform(settings=>({...settings,mfa_required:false})),
 };
 export type Command = keyof typeof commands;
 export const reportFilters = z.object({year_id:optionalId,department_id:optionalId,event_id:optionalId,member_id:optionalId,account_id:optionalId,category_id:optionalId,from:optionalDate,to:optionalDate});

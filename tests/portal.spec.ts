@@ -1,8 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadEnvFile } from "node:process";
-import { createHmac, randomUUID } from "node:crypto";
-import { authOperation, configuration, serviceDatabase } from "../lib/finance-auth";
-import { hashPassword } from "../lib/passwords";
 try { loadEnvFile(".env.local"); } catch { /* CI may set variables directly. */ }
 const password=process.env.DEMO_PASSWORD??"";
 
@@ -35,6 +32,9 @@ test("treasurer can view dashboard, open all admin modules, and export reports",
     await page.goto("/admin/"+route);
     await expect(page.getByRole("heading",{name:title,exact:true})).toBeVisible();
   }
+  await expect(page.getByLabel("Require administrator MFA")).toHaveCount(0);
+  await page.getByRole("button",{name:"Save settings"}).click();
+  await expect(page.getByText("Changes saved.",{exact:true})).toBeVisible();
   for(const format of ["csv","xlsx","pdf"]) {
     const exported=await page.request.get("/api/download/report/trial-balance?format="+format);
     expect(exported.status()).toBe(200);
@@ -162,33 +162,11 @@ test("temporary member password requires replacement before finance access",asyn
   await member.close();
 });
 
-
-test("officers enrol and verify an app-managed authenticator",async({page,browser,baseURL})=>{
-  const config=configuration();
-  const loopback=["localhost","127.0.0.1","[::1]"];
-  test.skip(!config||!baseURL||!loopback.includes(new URL(baseURL).hostname)||!loopback.includes(new URL(config.url).hostname),"Uses a local fixture officer.");
-  const username="mfa-"+randomUUID();
-  await authOperation(serviceDatabase(),"officer_create",{
-    username,name:"MFA Test Officer",role:"FINANCE_SECRETARY",password_hash:await hashPassword(password),
-  });
-  await signIn(page,username,/\/admin$/);
+test("the old authenticator URL uses the normal sign-in flow",async({page})=>{
   await page.goto("/mfa");
-  await page.getByRole("button",{name:"Set up authenticator"}).click();
-  const secret=await page.locator(".mfa-secret code").innerText();
-  const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const bits=Array.from(secret,letter=>alphabet.indexOf(letter).toString(2).padStart(5,"0")).join("");
-  const key=Buffer.from(bits.match(/.{8}/g)!.map(byte=>Number.parseInt(byte,2)));
-  const counter=Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
-  const digest=createHmac("sha1",key).update(counter).digest();
-  const offset=digest[digest.length-1]&15;
-  const code=String((digest.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0");
-  await page.getByLabel("Authenticator code").fill(code);
-  await page.getByRole("button",{name:"Verify code"}).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await signIn(page,"admin",/\/admin$/);
+  await page.goto("/mfa");
   await expect(page).toHaveURL(/\/admin$/);
-
-  const challenge=await browser.newPage({baseURL});
-  await signIn(challenge,username,/\/mfa$/);
-  expect((await challenge.request.get("/api/download/report/trial-balance")).status()).toBe(403);
-  await challenge.close();
+  await expect(page.getByRole("heading",{name:"Dashboard",exact:true})).toBeVisible();
 });

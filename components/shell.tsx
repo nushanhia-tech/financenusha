@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, Globe, Menu, Moon, Search, Sun, X, PanelTop, LogOut, Shield, WalletCards } from "lucide-react";
+import { Bell, ChevronDown, Globe, Menu, Moon, Search, Sun, X, PanelTop, LogOut, WalletCards } from "lucide-react";
 import { logout } from "@/app/actions";
 import { adminNavigation, hrefFor, memberNavigation } from "@/lib/navigation";
 import { translate, type Language } from "@/lib/i18n";
@@ -29,7 +29,7 @@ export function Shell({portal,profile,unread,language,theme,children}:{portal:"a
   const initials=profile.name.split(/\s+/).slice(0,2).map(part=>part[0]?.toUpperCase()).join("");
   const accountMenu=<details className="user-menu">
     <summary aria-label={t("Account menu")}><span className="avatar">{initials}</span><span className="top-user"><strong>{profile.name}</strong><small>{human(profile.role.toLowerCase())}</small></span><ChevronDown size={13} aria-hidden="true"/></summary>
-    <div>{portal==="admin"&&<Link href="/mfa"><Shield size={16}/> {t("Two-factor authentication")}</Link>}<form action={logout}><button><LogOut size={16}/>{t("Sign out")}</button></form></div>
+    <div><form action={logout}><button><LogOut size={16}/>{t("Sign out")}</button></form></div>
   </details>;
   return <LanguageProvider language={language}><div className="shell" onKeyDown={event=>{if(event.key==="Escape")setOpen(false);}}>
     {open&&<button className="scrim" tabIndex={-1} aria-label="Close navigation" onClick={()=>setOpen(false)}/>}

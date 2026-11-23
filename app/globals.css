@@ -297,8 +297,6 @@ th:last-child,td:last-child {padding-right:18px;}
 .auth-content .text-link {padding:0;border:0;background:transparent;width:max-content;font-size:12px;}
 .auth-content .back-link {margin-bottom:9px;}
 .setup-list {margin:0;padding-left:18px;display:grid;gap:8px;list-style:decimal;color:var(--muted);}
-.mfa-secret {display:grid;gap:8px;}
-.mfa-secret img {background:white;border-radius:7px;padding:5px;}
 
 @media(max-width:1180px) {
  .shell {grid-template-columns:207px minmax(0,1fr);}

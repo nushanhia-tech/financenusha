@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Download, Shield } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 import { ActionForm, Field, Hidden } from "../forms";
 import { Card, Heading, Pagination, Status, Table, type Column } from "../primitives";
 import { Filters } from "../filters";
@@ -81,14 +81,12 @@ export async function Audit({db,params}:Screen) {
 export async function Settings({db}:Screen) {
   const [row]=await smallList(db,"app_settings");
   const boolean=[{value:"true",label:"Enabled"},{value:"false",label:"Disabled"}];
-  return <div className="detail-stack"><Heading title="Settings" description="Configure approval thresholds, MFA requirements, and budget alerts."/>
+  return <div className="detail-stack"><Heading title="Settings" description="Configure approval thresholds, maker-checker, and budget alerts."/>
     <Card title="Financial controls" className="form-card"><ActionForm command="settings_save" submit="Save settings"><div className="form-grid">
       <Field name="approval_threshold" label="Single approval from (INR)" type="number" step="0.01" min="0" value={value(row,"approval_threshold")} required/>
       <Field name="high_threshold" label="Two approvals from (INR)" type="number" step="0.01" min="0" value={value(row,"high_threshold")} required/>
       <Field name="maker_checker" label="Maker-checker" options={boolean} value={String(row.maker_checker)} required/>
-      <Field name="mfa_required" label="Require administrator MFA" options={boolean} value={String(row.mfa_required)} required/>
       <Field name="budget_warning" label="Budget warning threshold (%)" type="number" min="1" max="100" step="0.01" value={value(row,"budget_warning")} required/>
     </div><p className="form-help">With maker-checker enabled, two approvals require two different administrators in addition to the transaction creator.</p></ActionForm></Card>
-    <Card title="Account security" className="form-card"><Button asChild variant="outline"><Link href="/mfa"><Shield size={16}/> Manage two-factor authentication</Link></Button></Card>
   </div>;
 }

@@ -9,9 +9,7 @@ export type FinanceIdentity = {
   name: string;
   role: Role;
   username: string;
-  aal: "aal1" | "aal2";
   must_change_password: boolean;
-  totp_enabled: boolean;
 };
 const settings = { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false };
 
@@ -34,13 +32,13 @@ export function serviceDatabase() {
   return createClient(url,serviceKey,{auth:settings});
 }
 
-export function financeToken(identity: Pick<FinanceIdentity,"id"|"session_id"|"aal">) {
+export function financeToken(identity: Pick<FinanceIdentity,"id"|"session_id">) {
   const {signingKey}=requireConfiguration();
   const encode=(value:object)=>Buffer.from(JSON.stringify(value)).toString("base64url");
   const now=Math.floor(Date.now()/1000);
   const payload=encode({alg:"HS256",typ:"JWT"})+"."+encode({
     iss:"supabase",aud:"authenticated",role:"authenticated",sub:identity.id,
-    nusha_session_id:identity.session_id,aal:identity.aal,iat:now,exp:now+300,
+    nusha_session_id:identity.session_id,aal:"aal1",iat:now,exp:now+300,
   });
   return payload+"."+createHmac("sha256",signingKey).update(payload).digest("base64url");
 }

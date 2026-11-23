@@ -51,7 +51,9 @@ Open `http://localhost:3000` and sign in with username `admin` and password `adm
    join finance_private.credentials c on c.user_id = u.id;
    ```
 
-   Existing supported password hashes are carried forward. Members with pending invitations can get a temporary password from their officer. Users sign in again after the deployment, and any officers using two-factor authentication enroll their authenticator in the new login system.
+   Existing supported password hashes are carried forward. Members with pending invitations can get a temporary password from their officer. Users sign in again after the deployment.
+
+   Apply `202611230007_password_only_sign_in.sql` to existing installations before upgrading the app. It retires authenticator enrollment and verification. You can also run the full file in the Supabase SQL Editor.
 
 2. In Vercel, import `nushanhia-tech/financenusha` as a Next.js project and set these **Production** Variables before deploying.
 
@@ -74,7 +76,7 @@ Open `http://localhost:3000` and sign in with username `admin` and password `adm
 
    For an existing officer username use `npm run auth:officer -- reset USERNAME`. The demo password is only set by the local seed. Use individual officer accounts with passwords of at least 12 characters. High-value approvals require distinct reviewers under the configured maker-checker policy.
 
-4. Deploy and verify the officer sign-in at the final Vercel URL. In **Members**, use **Create member login** or **Reset member password** to generate a temporary password and share it privately. It expires after 24 hours. The member sets a permanent password before accessing finance pages. To require officer MFA, enroll in the application and enable the requirement in Settings.
+4. Deploy and verify the officer sign-in at the final Vercel URL. In **Members**, use **Create member login** or **Reset member password** to generate a temporary password and share it privately. It expires after 24 hours. The member sets a permanent password before accessing finance pages.
 
 ## Financial workflows
 

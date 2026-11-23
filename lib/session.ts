@@ -42,7 +42,7 @@ export async function requirePortal(area:"admin"|"member") {
   if(current.profile.must_change_password)redirect("/reset");
   if(area==="admin") {
     if(current.profile.role==="MEMBER")redirect("/member");
-    if(!current.admin)redirect("/mfa");
+    if(!current.admin)redirect("/setup?notice=database-update");
   } else {
     if(current.profile.role!=="MEMBER")redirect("/admin");
     if(!current.member)redirect("/login?notice=inactive");

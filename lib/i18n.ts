@@ -69,7 +69,7 @@ Object.assign(ml,{
   "Academic year name":"അധ്യയന വർഷത്തിന്റെ പേര്","Start date":"ആരംഭ തീയതി","End date":"അവസാന തീയതി","Create year":"അധ്യയന വർഷം സൃഷ്ടിക്കുക",
   "Set active year":"സജീവ വർഷമായി നിശ്ചയിക്കുക","Year-end checklist":"വർഷാവസാന പരിശോധനാ പട്ടിക","Close and lock year":"വർഷം അടച്ച് പൂട്ടുക",
   "Financial controls":"സാമ്പത്തിക നിയന്ത്രണങ്ങൾ","Save settings":"ക്രമീകരണങ്ങൾ സംരക്ഷിക്കുക","Account security":"അക്കൗണ്ട് സുരക്ഷ",
-  "Two-factor authentication":"ദ്വിഘടക പ്രാമാണീകരണം","Mark all as read":"എല്ലാം വായിച്ചതായി അടയാളപ്പെടുത്തുക","Read":"വായിച്ചു",
+  "Mark all as read":"എല്ലാം വായിച്ചതായി അടയാളപ്പെടുത്തുക","Read":"വായിച്ചു",
   "Mark as read":"വായിച്ചതായി അടയാളപ്പെടുത്തുക","Contact details":"ബന്ധപ്പെടാനുള്ള വിവരങ്ങൾ","Update":"അപ്ഡേറ്റ്","Created":"സൃഷ്ടിച്ചത്",
   "Created by":"സൃഷ്ടിച്ചത്","Verified by":"പരിശോധിച്ചത്","No records found":"രേഖകളൊന്നും കണ്ടെത്തിയില്ല","Search records…":"രേഖകൾ തിരയുക…",
   "Search notifications…":"അറിയിപ്പുകൾ തിരയുക…","Newest first":"പുതിയത് ആദ്യം","Oldest first":"പഴയത് ആദ്യം",

@@ -1,9 +1,8 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
-import { CircleAlert, CircleCheck, LoaderCircle, Shield } from "lucide-react";
-import { mutate, enrollFactor, verifyFactor, type ActionResult } from "@/app/actions";
+import { useActionState, useTransition } from "react";
+import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react";
+import { mutate, type ActionResult } from "@/app/actions";
 import type { Command } from "@/lib/validation";
 import type { Option } from "@/lib/model";
 import { useTranslation } from "./language";
@@ -42,12 +41,3 @@ export function Field({label,name,type="text",value,placeholder,required=false,o
   </label>;
 }
 export const Hidden=({name,value}:{name:string;value:string})=><input type="hidden" name={name} value={value}/>;
-export function MfaControls({enabled}:{enabled:boolean}) {
-  const [enrollment,setEnrollment]=useState<ActionResult>({});
-  const [busy,start]=useTransition();
-  return <>
-    {!enabled&&!enrollment.secret&&<><p>Use an authenticator app to generate a six-digit code for your administrator account.</p><Feedback state={enrollment}/><Button disabled={busy} onClick={()=>start(async()=>setEnrollment(await enrollFactor()))}><Shield size={16}/> Set up authenticator</Button></>}
-    {enrollment.qr&&<div className="mfa-secret"><Image unoptimized alt="Authenticator enrollment QR code" width={160} height={160} src={enrollment.qr}/><p>Setup key <code>{enrollment.secret}</code></p></div>}
-    {(enabled||enrollment.secret)&&<ActionForm action={verifyFactor} submit="Verify code"><Field label="Authenticator code" name="code" autoComplete="one-time-code" required placeholder="000000"/></ActionForm>}
-  </>;
-}
