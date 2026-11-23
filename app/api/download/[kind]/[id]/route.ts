@@ -29,10 +29,16 @@ export async function GET(request:Request,context:{params:Promise<{kind:string;i
     }
     const {data:receipt}=await actor.db.from("receipt_detail").select("*").eq("id",id).maybeSingle();
     if(!receipt)return response("Receipt not found.",404);
-    const {data:tx}=await actor.db.from("transaction_detail").select("member_name,account_name,method,reference,state").eq("id",receipt.transaction_id).maybeSingle();
+    const [{data:tx},{data:reversal,error:reversalError}]=await Promise.all([
+      actor.db.from("transaction_detail").select("member_name,account_name,method,reference,state").eq("id",receipt.transaction_id).maybeSingle(),
+      actor.db.from("transactions").select("code,transaction_date").eq("related_transaction_id",receipt.transaction_id)
+        .eq("kind","reversal").eq("state","posted").maybeSingle(),
+    ]);
+    if(reversalError)return response("The receipt could not be generated.",500);
     if(tx?.state!=="posted")return response("Receipt not found.",404);
     const title=receipt.kind==="expense"||receipt.kind==="reimbursement"?"Expense Voucher":receipt.kind==="refund"?"Refund Acknowledgement":"Payment Receipt";
-    const buffer=await pdf(title,receipt.number,[{"Receipt number":receipt.number,Transaction:receipt.code,Date:dateLabel(receipt.transaction_date),Description:receipt.description,Member:tx.member_name??"—",
+    const status=reversal?"Reversed by "+reversal.code+" on "+dateLabel(reversal.transaction_date):"Posted";
+    const buffer=await pdf(title,receipt.number,[{"Receipt number":receipt.number,Transaction:receipt.code,Status:status,Date:dateLabel(receipt.transaction_date),Description:receipt.description,Member:tx.member_name??"—",
       Account:tx.account_name??"—","Payment method":human(tx.method??""),Reference:tx.reference??"—",Amount:money(receipt.amount)}],true);
     return fileResponse(buffer as Uint8Array<ArrayBuffer>,receipt.number+".pdf",contentType.pdf);
   }

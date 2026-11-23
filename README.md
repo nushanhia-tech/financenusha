@@ -13,7 +13,7 @@ npm run supabase -- status -o env
 cp .env.example .env.local
 ```
 
-Populate `.env.local` using the local output:
+Use the local CLI output to populate `.env.local`.
 
 | Variable | Value |
 | --- | --- |

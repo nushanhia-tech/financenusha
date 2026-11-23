@@ -70,7 +70,7 @@ test("admin can save, submit, and post a draft from the portal",async({page})=>{
   await signIn(page,"treasurer@nusha.test",/\/admin$/);
   await page.getByRole("link",{name:"New transaction"}).click();
   await page.getByLabel("Amount (INR)").fill("32.01");
-  await page.getByLabel("Category",{exact:true}).selectOption({label:"Contributions"});
+  await page.getByRole("combobox",{name:"Category",exact:true}).selectOption({label:"Contributions"});
   await page.getByLabel("Financial account").selectOption({label:"Union Bank Account"});
   await page.getByLabel("Description").fill("Browser workflow contribution "+Date.now());
   await page.getByRole("button",{name:"Save draft",exact:true}).click();
