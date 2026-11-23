@@ -17,7 +17,7 @@ const labels={ledger:"My Financial Ledger",payments:"My Payments",contributions:
   refunds:"My Refunds",reimbursements:"My Reimbursements",receipts:"My Receipts",statements:"My Statements",profile:"My Profile"};
 
 export default async function MemberSection({params,searchParams}:{params:Promise<{section:string}>;searchParams:Promise<Params>}) {
-  const {db,member,language}=await portalContext("member");
+  const {db,member,profile,language}=await portalContext("member");
   const [{section},query]=await Promise.all([params,searchParams]);
   const memberId=member!.id;
   const path="/member/"+section;
@@ -27,7 +27,7 @@ export default async function MemberSection({params,searchParams}:{params:Promis
   if(section==="profile") {
     const row=await record(db,"members",memberId);
     return <div className="detail-stack"><Heading title={title} description="View your membership and update your phone number."/>
-      <Card title="Membership"><Info fields={[["Name",value(row,"name")],["Email",value(row,"email")],["Member ID",value(row,"member_number")],["Payment profile",value(row,"payment_profile")]]}/></Card>
+      <Card title="Membership"><Info fields={[["Name",value(row,"name")],["Username",profile.username],["Email",value(row,"email")],["Member ID",value(row,"member_number")],["Payment profile",value(row,"payment_profile")]]}/></Card>
       <Card title="Contact details" className="form-card"><ActionForm command="profile_update" submit="Save changes"><Field name="phone" label="Phone" type="tel" value={value(row,"phone")}/></ActionForm></Card></div>;
   }
   if(section==="proof") {

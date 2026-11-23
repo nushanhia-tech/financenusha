@@ -5,7 +5,7 @@ create type proof_state as enum ('submitted','under_review','verified','rejected
 create type account_kind as enum ('asset','liability','equity','income','expense');
 
 create table users (
- id uuid primary key references auth.users on delete restrict, name text not null,
+ id uuid primary key, name text not null,
  role finance_role not null default 'MEMBER', active boolean not null default true, created_at timestamptz not null default now()
 );
 create table academic_years (

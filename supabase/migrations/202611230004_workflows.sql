@@ -282,23 +282,7 @@ begin
  return item;
 end $$;
 
-create function public.link_member_login(member_id uuid, user_id uuid, requested_by uuid) returns uuid
-language plpgsql security definer set search_path=public,pg_temp as $$
-declare profile members; auth_email text;
-begin
- select * into strict profile from members m where m.id=member_id and m.active for update;
- if profile.user_id is not null and profile.user_id<>link_member_login.user_id then raise exception 'Member already has a login'; end if;
- if not exists(select from users where id=requested_by and role<>'MEMBER' and active) then raise exception 'Administrator required'; end if;
- select lower(email) into strict auth_email from auth.users u where u.id=link_member_login.user_id;
- if auth_email is distinct from lower(profile.email) then raise exception 'Email mismatch'; end if;
- insert into users(id,name,role) values(user_id,profile.name,'MEMBER') on conflict(id) do nothing;
- if not exists(select from users where id=link_member_login.user_id and role='MEMBER') then raise exception 'Cannot link an administrator'; end if;
- update members m set user_id=link_member_login.user_id where m.id=member_id;
- perform finance_private.audit(requested_by,'member_login_linked','members',member_id,null,jsonb_build_object('user_id',link_member_login.user_id));
- return member_id;
-end $$;
-revoke all on function public.finance_command(text,jsonb),public.link_member_login(uuid,uuid,uuid) from public, anon, authenticated;
+revoke all on function public.finance_command(text,jsonb) from public,anon,authenticated;
 grant execute on function public.finance_command(text,jsonb) to authenticated;
-grant execute on function public.link_member_login(uuid,uuid,uuid) to service_role;
 revoke all on all functions in schema finance_private from public, anon, authenticated;
 grant execute on function finance_private.actor(),finance_private.is_admin(),finance_private.member(),finance_private.owned_unregistered_object(text) to authenticated;

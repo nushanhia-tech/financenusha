@@ -1,12 +1,17 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+import { headers } from "next/headers";
+import { toDataURL } from "qrcode";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { appOrigin, configuration, database, privilegedAuth } from "@/lib/supabase";
-import { session } from "@/lib/session";
-import { authInput, commands, newPassword, parseCsv, resetEmail, trustedFileType, type Command } from "@/lib/validation";
+import { authOperation, authenticate, configuration, databaseFor, serviceDatabase } from "@/lib/finance-auth";
+import { hashPassword } from "@/lib/passwords";
+import { decryptTotp, encryptTotp, newTotpSecret, validTotpCounter } from "@/lib/totp";
+import { clearSessionCookie, session, sessionDigest, setSessionCookie } from "@/lib/session";
+import { authInput, commands, newPassword, parseCsv, trustedFileType, type Command } from "@/lib/validation";
 
-export type ActionResult = { error?: string; message?: string; id?: string; qr?: string; secret?: string; factor?: string };
+export type ActionResult = { error?: string; message?: string; id?: string; qr?: string; secret?: string; username?: string; temporaryPassword?: string };
 const privateKinds = new Set<Command>(["profile_update","proof_submit","notification_read"]);
 const rpcError = (error: { message: string; code?: string }) => {
   if (error.code === "23505") return "A record with the same name, reference, or approval already exists.";
@@ -62,20 +67,16 @@ export async function mutate(command: Command, _previous: ActionResult, form: Fo
       if (error) return { error:"The attachment could not be uploaded." };
       uploaded = path;
     }
-    if (command === "member_invite") {
-      const memberId = String(raw.id);
-      const { data: member } = await current.db.from("members").select("id,email,active,user_id").eq("id",memberId).maybeSingle();
-      if (!member?.active || member.user_id) return {error:"Select an active member without a linked login."};
-      const admin = privilegedAuth();
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(member.email,{redirectTo:appOrigin()+"/auth/callback"});
-      if (error || !data.user) return {error:error?.message ?? "The invitation could not be issued."};
-      const { error: linkError } = await admin.rpc("link_member_login",{ member_id: member.id, user_id:data.user.id,requested_by:current.profile.id });
-      if (linkError) {
-        await admin.auth.admin.deleteUser(data.user.id);
-        return {error:rpcError(linkError)};
-      }
+    if (command==="member_login_create" || command==="member_login_reset") {
+      const password=randomBytes(15).toString("base64url");
+      const {data:username,error}=await current.db.rpc("finance_member_password",{
+        member_id:String(raw.id),
+        password_hash:await hashPassword(password),
+        replace_existing:command==="member_login_reset",
+      });
+      if(error)return {error:rpcError(error)};
       revalidatePath("/admin/members");
-      return {message:"Member invitation sent."};
+      return {message:command==="member_login_create"?"Member login created.":"Temporary password created.",username,temporaryPassword:password};
     }
     const { data, error } = await current.db.rpc("finance_command",{command,p:parsed.data});
     if (error) {
@@ -97,56 +98,74 @@ export async function mutate(command: Command, _previous: ActionResult, form: Fo
 }
 
 export async function login(_previous: ActionResult, form: FormData): Promise<ActionResult> {
-  if (!configuration()) return {error:"Configure Supabase to sign in."};
-  const input = authInput.safeParse(Object.fromEntries(form));
-  if (!input.success) return {error:"Enter a valid email and password."};
-  const db = await database();
-  const { data, error } = await db.auth.signInWithPassword(input.data);
-  if (error || !data.user) return {error:error?.status===429 ? "Too many attempts. Try again later." : "The email or password could not be verified."};
-  const {data:profile} = await db.from("users").select("role").eq("id",data.user.id).maybeSingle();
-  if (!profile) { await db.auth.signOut(); return {error:"This account has no active NUSHA Finance profile."}; }
-  await db.rpc("finance_command",{command:"login"});
-  redirect(profile.role==="MEMBER" ? "/member" : "/admin");
+  if(!configuration())return {error:"Configure the finance database to sign in."};
+  const input=authInput.safeParse(Object.fromEntries(form));
+  const failure={error:"The username or password could not be verified."};
+  if(!input.success)return failure;
+  const requestHeaders=await headers();
+  const ip=requestHeaders.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()||"local";
+  const db=serviceDatabase();
+  const result=await authenticate(db,input.data.username,input.data.password,ip);
+  if(result.state==="limited")return {error:"Too many attempts. Try again later."};
+  if(result.state!=="signed_in")return failure;
+
+  const previous=await sessionDigest();
+  if(previous)await authOperation(db,"session_end",{token_hash:previous});
+  await setSessionCookie(result.token);
+  if(result.identity.must_change_password)redirect("/reset");
+  await databaseFor(result.identity).rpc("finance_command",{command:"login"});
+  redirect(result.identity.role==="MEMBER"?"/member":"/admin");
 }
 
 export async function logout() {
-  if (configuration()) await (await database()).auth.signOut();
+  const tokenHash=await sessionDigest();
+  try {
+    if(tokenHash&&configuration())await authOperation(serviceDatabase(),"session_end",{token_hash:tokenHash});
+  } finally {
+    await clearSessionCookie();
+  }
   redirect("/login");
 }
 
-export async function requestReset(_previous: ActionResult, form: FormData): Promise<ActionResult> {
-  const input = resetEmail.safeParse(Object.fromEntries(form));
-  if (!input.success) return {error:"Enter a valid email."};
-  if (!configuration()) return {error:"Configure Supabase first."};
-  await (await database()).auth.resetPasswordForEmail(input.data.email,{redirectTo:appOrigin()+"/auth/callback"});
-  return {message:"If the account exists, a password reset email will arrive shortly."};
-}
-
-export async function changePassword(_previous: ActionResult, form: FormData): Promise<ActionResult> {
-  const input = newPassword.safeParse(form.get("password"));
-  if (!input.success) return {error:input.error.issues[0].message};
-  if (input.data!==form.get("confirm")) return {error:"The passwords do not match."};
-  const db = await database();
-  const {error} = await db.auth.updateUser({password:input.data});
-  if (error) return {error:"Open a current reset or invitation link and try again."};
-  await db.auth.signOut();
+export async function changePassword(_previous: ActionResult,form: FormData): Promise<ActionResult> {
+  const current=await session();
+  if(!current?.profile.must_change_password)return {error:"Sign in with your temporary password first."};
+  const input=newPassword.safeParse(form.get("password"));
+  if(!input.success)return {error:input.error.issues[0].message};
+  if(input.data!==form.get("confirm"))return {error:"The passwords do not match."};
+  const db=serviceDatabase();
+  const changed=await authOperation(db,"password_change",{
+    token_hash:current.tokenHash,password_hash:await hashPassword(input.data),
+  });
+  if(!changed)return {error:"Sign in again with your current temporary password."};
+  await clearSessionCookie();
   redirect("/login?notice=password");
 }
 
 export async function enrollFactor(): Promise<ActionResult> {
-  const current = await session();
-  if (!current || current.profile.role==="MEMBER") return {error:"Administrator account required."};
-  const {data,error} = await current.db.auth.mfa.enroll({factorType:"totp",friendlyName:"NUSHA Finance"});
-  return error || !data ? {error:error?.message ?? "Could not start MFA setup."} : {factor:data.id,qr:data.totp.qr_code,secret:data.totp.secret};
+  const current=await session();
+  if(!current||current.profile.role==="MEMBER"||current.profile.must_change_password)return {error:"Administrator account required."};
+  const stored=await authOperation<{secret:string}>(serviceDatabase(),"totp_begin",{
+    token_hash:current.tokenHash,secret:encryptTotp(newTotpSecret()),
+  });
+  if(!stored)return {error:"An authenticator is already enrolled or the session expired."};
+  const secret=decryptTotp(stored.secret);
+  const label=encodeURIComponent("NUSHA Finance:"+current.profile.username);
+  const params=new URLSearchParams({secret,issuer:"NUSHA Finance"});
+  return {secret,qr:await toDataURL("otpauth://totp/"+label+"?"+params.toString())};
 }
 
-export async function verifyFactor(_previous: ActionResult, form: FormData): Promise<ActionResult> {
-  const current = await session();
-  if (!current || current.profile.role==="MEMBER") return {error:"Administrator account required."};
-  const code = String(form.get("code") || "");
-  const factorId = String(form.get("factor") || "");
-  if (!/^\d{6}$/.test(code) || !/^[\da-f-]{36}$/i.test(factorId)) return {error:"Enter the six-digit authenticator code."};
-  const {error} = await current.db.auth.mfa.challengeAndVerify({factorId,code});
-  if (error) return {error:"The authenticator code could not be verified."};
+export async function verifyFactor(_previous: ActionResult,form: FormData): Promise<ActionResult> {
+  const current=await session();
+  if(!current||current.profile.role==="MEMBER"||current.profile.must_change_password)return {error:"Administrator account required."};
+  const code=String(form.get("code")||"");
+  if(!/^\d{6}$/.test(code))return {error:"Enter the six-digit authenticator code."};
+  const db=serviceDatabase();
+  const stored=await authOperation<{secret?:string;limited?:boolean}>(db,"totp_lookup",{token_hash:current.tokenHash});
+  if(stored?.limited)return {error:"Too many attempts. Try again later."};
+  const counter=stored?.secret?validTotpCounter(decryptTotp(stored.secret),code):null;
+  if(counter===null)return {error:"The authenticator code could not be verified."};
+  const verified=await authOperation(db,"totp_confirm",{token_hash:current.tokenHash,secret:stored!.secret,counter});
+  if(!verified)return {error:"Use a fresh authenticator code."};
   redirect("/admin");
 }

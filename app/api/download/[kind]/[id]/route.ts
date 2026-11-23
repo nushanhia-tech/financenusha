@@ -15,7 +15,7 @@ function fileResponse(body:BodyInit,name:string,mime:string,inline=false) {
 
 export async function GET(request:Request,context:{params:Promise<{kind:string;id:string}>}) {
   const actor=await session();
-  if(!actor)return response("Sign in to download this file.",401);
+  if(!actor||actor.profile.must_change_password)return response("Sign in to download this file.",401);
   const {kind,id}=await context.params;
   const u=new URL(request.url);
   if(kind==="document"||kind==="receipt") {

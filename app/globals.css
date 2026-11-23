@@ -363,3 +363,6 @@ th:last-child,td:last-child {padding-right:18px;}
 @media(prefers-reduced-motion:reduce) {
  *,*::before,*::after {scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}
 }
+.temporary-login {padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);}
+.temporary-login dl {display:grid;grid-template-columns:auto auto;gap:4px 8px;margin:0;}
+.temporary-login dd {margin:0;overflow-wrap:anywhere;}

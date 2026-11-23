@@ -21,8 +21,8 @@ const decision = z.enum(["approved","rejected"]);
 const bool = z.enum(["true","false"]).transform(value => value === "true");
 const document = { object_path: z.string().min(1).max(512), file_name: z.string().trim().min(1).max(255) };
 const memberRow = z.object({ name, email, phone });
-export const authInput = z.object({ email, password: z.string().min(1).max(100) });
-export const resetEmail = z.object({ email });
+export const usernameInput = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,47}$/);
+export const authInput = z.object({username:usernameInput,password:z.string().min(1).max(100)});
 export const newPassword = z.string().min(12,"Use at least 12 characters.").max(100);
 export const commands = {
   transaction_save: z.object({ ...base, request_id: id, year_id, transaction_date: z.iso.date(), kind: z.enum(kinds).exclude(["reversal"]), operation: z.enum(operations.map(item=>item[0])), amount: positive, description: reason,
@@ -37,7 +37,7 @@ export const commands = {
   event_save:z.object({...base,name,description,year_id,event_date:z.iso.date(),department_id:optionalId}),
   member_save:z.object({...base,...memberRow.shape,year_id,department_id:optionalId,payment_profile:description}),
   member_import:z.object({year_id,department_id:optionalId,rows:z.array(memberRow).min(1).max(500)}),
-  member_status:z.object({...ids,active:bool}),member_invite:z.object(ids),member_reminder:z.object(ids),
+  member_status:z.object({...ids,active:bool}),member_login_create:z.object(ids),member_login_reset:z.object(ids),member_reminder:z.object(ids),
   account_save:z.object({...base,name,kind:z.enum(["cash","bank","upi","other"]),active:bool.optional()}),
   reconcile:z.object({account_id:id,year_id,statement_date:z.iso.date(),actual_balance:signed,lines:z.array(z.object({reference:z.string().trim().min(1).max(120),amount:signed})).max(1000)}),
   sponsor_save:z.object({...base,name,kind:z.enum(["sponsor","donor"]),email:optionalEmail,description}),

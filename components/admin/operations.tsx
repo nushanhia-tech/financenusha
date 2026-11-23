@@ -81,12 +81,12 @@ export async function Members({db,params}:Screen) {
     return <div className="detail-stack"><Back path={path}/><Heading title={value(row,"name")} description={value(row,"member_number")} actions={<Button asChild variant="outline"><Link href={exportLink("member-ledger","member_id",selected)}><Download size={16}/> Member statement</Link></Button>}/>
       <Card title="Member account"><Info fields={[
         ["Email",value(row,"email")],["Phone",value(row,"phone")],["Department",c.departments.find(d=>d.value===row.department_id)?.label],
-        ["Login status",row.user_id?"Linked to Auth":"Invitation needed"],["Membership",<Status key="member-status" state={row.active?"active":"inactive"}/>],
+        ["Login status",row.user_id?"Username assigned":"Needs a login"],["Username",row.user_id?value(row,"member_number").toLowerCase():"—"],["Membership",<Status key="member-status" state={row.active?"active":"inactive"}/>],
         ["Total paid",money(row.total_paid)],["Contributions",money(row.contributions)],["Amount due",money(row.amount_due)],["Union owes",money(row.union_owes)],
         ["Refunds",money(row.refunds)],["Reimbursements",money(row.reimbursements)],["Outstanding advances",money(row.advances)],
       ]}/></Card>
       <div className="heading-actions">
-        {Boolean(row.active)&&!row.user_id&&<ActionForm compact command="member_invite" submit="Invite member"><Hidden name="id" value={selected}/></ActionForm>}
+        {Boolean(row.active)&&<ActionForm compact command={row.user_id?"member_login_reset":"member_login_create"} submit={row.user_id?"Reset member password":"Create member login"}><Hidden name="id" value={selected}/></ActionForm>}
         <ActionForm compact command="member_status" variant="outline" submit={row.active?"Deactivate member":"Activate member"}><Hidden name="id" value={selected}/><Hidden name="active" value={String(!row.active)}/></ActionForm>
         {numeric(row,"amount_due")>0&&<ActionForm compact command="member_reminder" variant="outline" submit="Send dues reminder"><Hidden name="id" value={selected}/></ActionForm>}
         <Button asChild size="small"><Link href={txLink({member_id:selected,kind:"income",operation:"due"})}>Raise dues</Link></Button>
@@ -109,7 +109,7 @@ export async function Members({db,params}:Screen) {
     {name:"department_id",label:"Department",options:c.departments},{name:"year_id",label:"Academic year",options:c.years},{name:"active",label:"Status",options:[{value:"true",label:"Active"},{value:"false",label:"Inactive"}]},
   ]} actions={<><Button asChild variant="outline"><Link href={path+"?import=1"}>Import CSV</Link></Button><Add path={path} label="Add member"/></>} columns={[
     {key:"name",label:"Member",render:row=><DetailLink path={path} row={row}/>},{key:"member_number",label:"Member ID"},{key:"email",label:"Email"},{key:"amount_due",label:"Amount due",type:"money"},
-    {key:"active",label:"Status",render:row=><Status state={row.active?"active":"inactive"}/>},{key:"user_id",label:"Login",render:row=>row.user_id?"Linked":"Uninvited"},
+    {key:"active",label:"Status",render:row=><Status state={row.active?"active":"inactive"}/>},{key:"user_id",label:"Login",render:row=>row.user_id?"Username assigned":"Needs a login"},
   ]}/>;
 }
 export async function Departments({db,params}:Screen) {

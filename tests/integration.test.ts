@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { authenticate, authOperation, databaseFor, digestToken } from "../lib/finance-auth";
 import { todayIndia } from "../lib/model";
 
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -16,11 +17,12 @@ function must<T extends {data:unknown;error:unknown}>(result:T):NonNullable<T["d
   assert.equal(result.error,null,result.error?JSON.stringify(result.error):undefined);
   return result.data as NonNullable<T["data"]>;
 }
-async function open(email:string) {
-  const db=createClient(url,key,config);
-  const operator=must(await db.auth.signInWithPassword({email,password}));
-  assert.ok(operator.user);
-  return {db,user:operator.user};
+async function open(username:string) {
+  const service=createClient(url,serviceKey,config);
+  const operator=await authenticate(service,username,username==="admin"?"admin123":password,"integration");
+  assert.equal(operator.state,"signed_in");
+  if(operator.state!=="signed_in")throw new Error("Unable to sign in.");
+  return {db:databaseFor(operator.identity),user:operator.identity,token:operator.token};
 }
 const command=(db:SupabaseClient,command:string,p:Record<string,unknown>={})=>db.rpc("finance_command",{command,p});
 const action=async(db:SupabaseClient,verb:string,p:Record<string,unknown>={})=>String(must(await command(db,verb,p)));
@@ -30,10 +32,10 @@ const reject=async(db:SupabaseClient,verb:string,p:Record<string,unknown>,messag
   if(message)assert.match(error.message,message);
 };
 
-test("Supabase Auth, finance commands, role isolation and year close",async t=>{
+test("Username sign-in, finance commands, role isolation and year close",async t=>{
   const service=createClient(url,serviceKey,config);
   const [{db:admin,user:treasurer},{db:checker},{db:other},{db:memberA,user:userA},{db:memberB}]=await Promise.all(
-    ["treasurer","secretary","checker","member-a","member-b"].map(name=>open(name+"@nusha.test")));
+    ["admin","secretary","checker","nu-000001","nu-000002"].map(open));
   assert.equal(must(await admin.rpc("finance_admin_access")),true);
   assert.equal(must(await memberA.rpc("finance_admin_access")),false);
   const activeYear=must(await admin.from("academic_years").select("*").eq("active",true).single());
@@ -57,6 +59,13 @@ test("Supabase Auth, finance commands, role isolation and year close",async t=>{
   };
   const balance=async(id:string)=>Number(must(await admin.from("account_balances").select("balance").eq("id",id).single()).balance);
   const journal=async(id:string)=>must(await admin.from("journal_entries").select("debit,credit").eq("transaction_id",id));
+  await t.test("an ended application session revokes finance access immediately",async()=>{
+    const {db,token,user}=await open("nu-000001");
+    assert.ok(must(await db.from("users").select("id").eq("id",user.id).single()));
+    assert.ok((await db.rpc("finance_auth",{operation:"lookup",p:{username:"admin"}})).error);
+    await authOperation(service,"session_end",{token_hash:digestToken(token)});
+    assert.deepEqual(must(await db.from("users").select("id").eq("id",user.id)),[]);
+  });
   await t.test("members cannot read other records or invoke admin commands",async()=>{
     assert.deepEqual(must(await memberA.from("members").select("id").eq("id",otherMemberId)),[]);
     assert.deepEqual(must(await memberA.from("ledger_detail").select("id").eq("member_id",otherMemberId)),[]);
@@ -64,6 +73,7 @@ test("Supabase Auth, finance commands, role isolation and year close",async t=>{
     assert.deepEqual(must(await memberA.from("journal_entries").select("id").limit(1)),[]);
     await reject(memberA,"account_save",{name:"Disallowed",kind:"cash"},/Administrator/);
     assert.ok((await memberA.rpc("finance_report",{report:"trial-balance"})).error);
+    assert.ok((await memberA.rpc("finance_member_password",{member_id:otherMemberId,password_hash:null,replace_existing:true})).error);
   });
   let incomeId="";
   await t.test("income, expense, transfer and reversal post exact, balanced journal movements",async()=>{

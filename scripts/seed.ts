@@ -1,37 +1,42 @@
 import { randomUUID } from "node:crypto";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { authenticate, authOperation, configuration, databaseFor, digestToken, serviceDatabase } from "../lib/finance-auth";
 import { todayIndia } from "../lib/model";
+import { hashPassword } from "../lib/passwords";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL??"";
-const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY??"";
-const service=process.env.SUPABASE_SERVICE_ROLE_KEY??"";
-const password=process.env.DEMO_PASSWORD??"";
-if(!["localhost","127.0.0.1","[::1]"].includes(new URL(url).hostname)||password.length<12) throw new Error("Use a loopback Supabase URL and a local-only password of at least 12 characters.");
-const auth={persistSession:false,autoRefreshToken:false};
-const serviceDb=createClient(url,service,{auth});
+const config=configuration();
+const localHosts=["localhost","127.0.0.1","[::1]"];
+if(!config||!localHosts.includes(new URL(config.url).hostname)
+  ||!localHosts.includes(new URL(process.env.APP_ORIGIN??"http://localhost:3000").hostname)) {
+  throw new Error("Demo accounts can only be seeded on a loopback database and app.");
+}
+const serviceDb=serviceDatabase();
 function must<T extends {data:unknown;error:{message:string}|null}>(result:T):NonNullable<T["data"]> {
   if(result.error)throw new Error(result.error.message);
   return result.data as NonNullable<T["data"]>;
 }
-const roster=[
-  ["treasurer@nusha.test","Ananya Menon","TREASURER"],["secretary@nusha.test","Devika Nair","FINANCE_SECRETARY"],
-  ["checker@nusha.test","Joel Joseph","FINANCE_SECRETARY"],["member-a@nusha.test","Amina Rahman","MEMBER"],
-  ["member-b@nusha.test","Arjun Thomas","MEMBER"],["member-c@nusha.test","Meera Nair","MEMBER"],
-] as const;
-const existing=must(await serviceDb.auth.admin.listUsers({page:1,perPage:1000})).users;
-const profiles=new Map<string,string>();
-for(const [email,name,role] of roster) {
-  const user=existing.find(candidate=>candidate.email===email)??must(await serviceDb.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{name}})).user;
-  if(!user)throw new Error("Unable to create fixture user.");
-  profiles.set(email,user.id);
-  if(role!=="MEMBER")must(await serviceDb.from("users").upsert({id:user.id,name,role}));
+
+async function officer(username:string,name:string,role:"TREASURER"|"FINANCE_SECRETARY",password:string) {
+  const existing=await authOperation<{id?:string}>(serviceDb,"lookup",{username,attempt_key:digestToken("demo-seed")});
+  if(!existing?.id)await authOperation(serviceDb,"officer_create",{username,name,role,password_hash:await hashPassword(password)});
+  return operator(username,password);
 }
-const operator=async(email:string)=>{
-  const client=createClient(url,key,{auth});
-  must(await client.auth.signInWithPassword({email,password}));
-  return client;
-};
-const admin=await operator(roster[0][0]),checker=await operator(roster[1][0]),other=await operator(roster[2][0]);
+
+async function operator(username:string,password:string) {
+  const result=await authenticate(serviceDb,username,password,"demo-seed");
+  if(result.state!=="signed_in")throw new Error("Unable to sign in as local demo user "+username+".");
+  return databaseFor(result.identity);
+}
+
+const admin=await officer("admin","Ananya Menon","TREASURER","admin123");
+if(process.argv.includes("--account-only")) {
+  console.log("Local demo sign-in · username admin · password admin123");
+  process.exit(0);
+}
+const password=process.env.DEMO_PASSWORD??"";
+if(password.length<12) throw new Error("Set DEMO_PASSWORD to at least 12 characters for the remaining local demo users.");
+const checker=await officer("secretary","Devika Nair","FINANCE_SECRETARY",password);
+const other=await officer("checker","Joel Joseph","FINANCE_SECRETARY",password);
 const cmd=async(client:SupabaseClient,command:string,p:Record<string,unknown>={})=>String(must(await client.rpc("finance_command",{command,p})));
 if(must(await admin.from("financial_accounts").select("id").limit(1)).length) throw new Error("Demo finance data already exists. Use a fresh local database to seed again.");
 const today=todayIndia();
@@ -50,9 +55,14 @@ const bank=await cmd(admin,"account_save",{name:"Union Bank Account",kind:"bank"
 const upi=await cmd(admin,"account_save",{name:"UPI Collections",kind:"upi"});
 const cash=await cmd(admin,"account_save",{name:"Cash on Hand",kind:"cash"});
 const members:Record<string,string>={};
-for(const [email,name] of roster.slice(3)) {
+const demoMembers=[["member-a@nusha.test","Amina Rahman"],["member-b@nusha.test","Arjun Thomas"],["member-c@nusha.test","Meera Nair"]] as const;
+const demoHash=await hashPassword(password);
+for(const [email,name] of demoMembers) {
   const member=await cmd(admin,"member_save",{name,email,year_id:year,department_id:deps["Student Welfare"]});
-  must(await serviceDb.rpc("link_member_login",{member_id:member,user_id:profiles.get(email),requested_by:profiles.get(roster[0][0])}));
+  const username=must(await admin.rpc("finance_member_password",{member_id:member,password_hash:demoHash,replace_existing:false}));
+  const temporary=await authenticate(serviceDb,username,password,"demo-seed");
+  if(temporary.state!=="signed_in")throw new Error("Unable to activate demo member.");
+  await authOperation(serviceDb,"password_change",{token_hash:digestToken(temporary.token),password_hash:demoHash});
   members[name]=member;
 }
 const categories=new Map(must(await admin.from("transaction_categories").select("id,name")).map(row=>[row.name,row.id]));
@@ -101,4 +111,5 @@ await finance("Riverbank Bookshop sponsorship payment","income",25000,{category_
 const pending=await cmd(admin,"transaction_save",{request_id:randomUUID(),year_id:year,transaction_date:today,kind:"expense",description:"Sound and lighting invoice",amount:14500,category_id:categories.get("Sound"),account_id:bank,method:"bank",reference:"DEMO-PENDING"});
 await cmd(admin,"transaction_submit",{id:pending});
 console.log("Local demo seeded with posted journals and member ledgers.");
-console.log("Sign in using treasurer@nusha.test, secretary@nusha.test, member-a@nusha.test, or member-b@nusha.test and your DEMO_PASSWORD.");
+console.log("Local demo sign-in · username admin · password admin123");
+console.log("Other demo usernames · secretary, checker, nu-000001, nu-000002, nu-000003 · your DEMO_PASSWORD");

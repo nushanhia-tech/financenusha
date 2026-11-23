@@ -1,17 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadEnvFile } from "node:process";
+import { createHmac, randomUUID } from "node:crypto";
+import { authOperation, configuration, serviceDatabase } from "../lib/finance-auth";
+import { hashPassword } from "../lib/passwords";
 try { loadEnvFile(".env.local"); } catch { /* CI may set variables directly. */ }
 const password=process.env.DEMO_PASSWORD??"";
 
-async function signIn(page:Page,email:string,target:RegExp) {
+async function signIn(page:Page,username:string,target:RegExp,credential=username==="admin"?"admin123":password) {
   await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password",{exact:false}).fill(password);
+  await page.getByRole("textbox",{name:"Username"}).fill(username);
+  await page.getByLabel("Password",{exact:false}).fill(credential);
   await page.getByRole("button",{name:"Sign in",exact:true}).click();
   await expect(page).toHaveURL(target);
 }
 test("treasurer can view dashboard, open all admin modules, and export reports",async({page,request})=>{
-  await signIn(page,"treasurer@nusha.test",/\/admin$/);
+  await page.goto("/login");
+  await expect(page.getByRole("textbox",{name:"Email address"})).toHaveCount(0);
+  await signIn(page,"admin",/\/admin$/);
   await expect(page.getByRole("heading",{name:"Dashboard",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Cash flow",exact:true})).toBeVisible();
   const chartSeries=page.getByRole("combobox",{name:"Chart series",exact:true});
@@ -42,7 +47,7 @@ test("treasurer can view dashboard, open all admin modules, and export reports",
 });
 
 test("member routes stay private, including a substituted receipt ID",async({page,browser})=>{
-  await signIn(page,"member-a@nusha.test",/\/member$/);
+  await signIn(page,"nu-000001",/\/member$/);
   await expect(page.getByRole("heading",{name:"My Dashboard"})).toBeVisible();
   await page.goto("/admin/transactions");
   await expect(page).toHaveURL(/\/member$/);
@@ -55,7 +60,7 @@ test("member routes stay private, including a substituted receipt ID",async({pag
   expect(receipt).toBeTruthy();
   expect((await page.request.get(receipt!)).status()).toBe(200);
   const other=await browser.newPage();
-  await signIn(other,"member-b@nusha.test",/\/member$/);
+  await signIn(other,"nu-000002",/\/member$/);
   expect((await other.request.get(receipt!)).status()).toBe(404);
   expect((await other.request.get("/api/download/report/trial-balance")).status()).toBe(403);
   expect((await page.request.get("/api/download/statement/current?format=pdf")).status()).toBe(200);
@@ -64,7 +69,7 @@ test("member routes stay private, including a substituted receipt ID",async({pag
 
 test("finance secretary can enter the admin portal and use mobile navigation",async({page})=>{
   await page.setViewportSize({width:390,height:844});
-  await signIn(page,"secretary@nusha.test",/\/admin$/);
+  await signIn(page,"secretary",/\/admin$/);
   await expect(page.getByRole("heading",{name:"Transaction activity",exact:true})).toBeVisible();
   await page.setViewportSize({width:320,height:844});
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
@@ -86,7 +91,7 @@ test("finance secretary can enter the admin portal and use mobile navigation",as
 });
 
 test("admin can save, submit, and post a draft from the portal",async({page})=>{
-  await signIn(page,"treasurer@nusha.test",/\/admin$/);
+  await signIn(page,"admin",/\/admin$/);
   await page.getByRole("link",{name:"New transaction"}).click();
   await page.getByLabel("Amount (INR)").fill("32.01");
   await page.getByRole("combobox",{name:"Category",exact:true}).selectOption({label:"Contributions"});
@@ -104,7 +109,7 @@ test("admin can save, submit, and post a draft from the portal",async({page})=>{
 
 test("proof upload and authorised download work through the portal",async({page,browser})=>{
   test.skip(process.env.FINANCE_TEST_STORAGE==="metadata","Storage HTTP service is required for browser upload and download.");
-  await signIn(page,"member-a@nusha.test",/\/member$/);
+  await signIn(page,"nu-000001",/\/member$/);
   await page.goto("/member/proof");
   const reference="BROWSER-"+Date.now();
   await page.getByLabel("Amount (INR)").fill("46.90");
@@ -119,11 +124,11 @@ test("proof upload and authorised download work through the portal",async({page,
   const download=await submission.getByRole("link",{name:"Preview"}).getAttribute("href");
   expect((await page.request.get(download!)).status()).toBe(200);
   const other=await browser.newPage();
-  await signIn(other,"member-b@nusha.test",/\/member$/);
+  await signIn(other,"nu-000002",/\/member$/);
   expect((await other.request.get(download!)).status()).toBe(404);
   await other.close();
   const admin=await browser.newPage();
-  await signIn(admin,"secretary@nusha.test",/\/admin$/);
+  await signIn(admin,"secretary",/\/admin$/);
   await admin.goto("/admin/verification?q="+reference);
   await admin.getByRole("link",{name:reference,exact:true}).click();
   await admin.getByLabel("Receiving account").selectOption({label:"UPI Collections"});
@@ -131,4 +136,59 @@ test("proof upload and authorised download work through the portal",async({page,
   await admin.getByRole("button",{name:"Verify payment",exact:true}).click();
   await expect(admin.getByText("Verified",{exact:true})).toBeVisible();
   await admin.close();
+});
+
+
+test("temporary member password requires replacement before finance access",async({page,browser})=>{
+  await signIn(page,"admin",/\/admin$/);
+  await page.goto("/admin/members?q=Meera");
+  await page.getByRole("link",{name:"Meera Nair",exact:true}).click();
+  await page.getByRole("button",{name:"Reset member password",exact:true}).click();
+  const temporary=page.locator(".temporary-login");
+  await expect(temporary).toBeVisible();
+  const [name,initialPassword]=await temporary.locator("code").allTextContents();
+  expect(name).toBe("nu-000003");
+  expect(initialPassword.length).toBeGreaterThanOrEqual(12);
+
+  const member=await browser.newPage();
+  await signIn(member,name,/\/reset$/,initialPassword);
+  await member.goto("/member");
+  await expect(member).toHaveURL(/\/reset$/);
+  await member.getByLabel("New password").fill(password);
+  await member.getByLabel("Confirm password").fill(password);
+  await member.getByRole("button",{name:"Save password",exact:true}).click();
+  await expect(member).toHaveURL(/\/login\?notice=password$/);
+  await signIn(member,name,/\/member$/);
+  await member.close();
+});
+
+
+test("officers enrol and verify an app-managed authenticator",async({page,browser,baseURL})=>{
+  const config=configuration();
+  const loopback=["localhost","127.0.0.1","[::1]"];
+  test.skip(!config||!baseURL||!loopback.includes(new URL(baseURL).hostname)||!loopback.includes(new URL(config.url).hostname),"Uses a local fixture officer.");
+  const username="mfa-"+randomUUID();
+  await authOperation(serviceDatabase(),"officer_create",{
+    username,name:"MFA Test Officer",role:"FINANCE_SECRETARY",password_hash:await hashPassword(password),
+  });
+  await signIn(page,username,/\/admin$/);
+  await page.goto("/mfa");
+  await page.getByRole("button",{name:"Set up authenticator"}).click();
+  const secret=await page.locator(".mfa-secret code").innerText();
+  const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bits=Array.from(secret,letter=>alphabet.indexOf(letter).toString(2).padStart(5,"0")).join("");
+  const key=Buffer.from(bits.match(/.{8}/g)!.map(byte=>Number.parseInt(byte,2)));
+  const counter=Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
+  const digest=createHmac("sha1",key).update(counter).digest();
+  const offset=digest[digest.length-1]&15;
+  const code=String((digest.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0");
+  await page.getByLabel("Authenticator code").fill(code);
+  await page.getByRole("button",{name:"Verify code"}).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  const challenge=await browser.newPage({baseURL});
+  await signIn(challenge,username,/\/mfa$/);
+  expect((await challenge.request.get("/api/download/report/trial-balance")).status()).toBe(403);
+  await challenge.close();
 });

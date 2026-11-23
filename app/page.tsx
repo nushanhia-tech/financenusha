@@ -4,5 +4,5 @@ import { configuration } from "@/lib/supabase";
 
 export default async function Home() {
   const current=await session();
-  redirect(current?(current.profile.role==="MEMBER"?"/member":"/admin"):(configuration()?"/login":"/setup"));
+  redirect(current?(current.profile.must_change_password?"/reset":current.profile.role==="MEMBER"?"/member":"/admin"):(configuration()?"/login":"/setup"));
 }
