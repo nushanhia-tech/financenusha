@@ -32,8 +32,7 @@ export const session=cache(async()=>{
   const db=databaseFor(profile);
   if(profile.must_change_password)return {db,profile,member:null,admin:false,tokenHash};
   const {data:member}=profile.role==="MEMBER"?await db.from("members").select("id,email").eq("user_id",profile.id).maybeSingle():{data:null};
-  const {data:access}=profile.role!=="MEMBER"?await db.rpc("finance_admin_access"):{data:false};
-  return {db,profile,member,admin:access===true,tokenHash};
+  return {db,profile,member,admin:profile.role!=="MEMBER",tokenHash};
 });
 
 export async function requirePortal(area:"admin"|"member") {
@@ -42,7 +41,6 @@ export async function requirePortal(area:"admin"|"member") {
   if(current.profile.must_change_password)redirect("/reset");
   if(area==="admin") {
     if(current.profile.role==="MEMBER")redirect("/member");
-    if(!current.admin)redirect("/setup?notice=database-update");
   } else {
     if(current.profile.role!=="MEMBER")redirect("/admin");
     if(!current.member)redirect("/login?notice=inactive");
