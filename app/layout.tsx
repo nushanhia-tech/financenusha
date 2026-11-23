@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "@fontsource/noto-sans-malayalam/400.css";
 import "@fontsource/noto-sans-malayalam/600.css";
 import "./globals.css";
+import "./dashboard.css";
 
 export const metadata:Metadata={title:{default:"NUSHA Finance",template:"%s · NUSHA Finance"},description:"The financial management portal for NUSHA Students Union."};
 export default async function RootLayout({children}:{children:React.ReactNode}) {

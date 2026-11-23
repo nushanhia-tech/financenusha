@@ -13,7 +13,15 @@ async function signIn(page:Page,email:string,target:RegExp) {
 test("treasurer can view dashboard, open all admin modules, and export reports",async({page,request})=>{
   await signIn(page,"treasurer@nusha.test",/\/admin$/);
   await expect(page.getByRole("heading",{name:"Dashboard",exact:true})).toBeVisible();
-  await expect(page.getByText("Income & expenses",{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Cash flow",exact:true})).toBeVisible();
+  const chartSeries=page.getByRole("combobox",{name:"Chart series",exact:true});
+  await expect(chartSeries).toHaveValue("overview");
+  await chartSeries.selectOption("cash");
+  await expect(page.getByText("Net cash flow",{exact:true})).toBeVisible();
+  const exportLink=page.getByRole("link",{name:"Export transactions as CSV"});
+  const exportUrl=await exportLink.getAttribute("href");
+  expect(exportUrl).toContain("format=csv&year_id=");
+  expect((await page.request.get(exportUrl!)).status()).toBe(200);
   for(const [route,title] of Object.entries({
     transactions:"Transactions",accounts:"Union Accounts",members:"Members",departments:"Departments",events:"Events & Programs",
     sponsorship:"Sponsorship & Donations",verification:"Payment Verification",budgets:"Budget Management",documents:"Bills & Receipts",
@@ -57,6 +65,17 @@ test("member routes stay private, including a substituted receipt ID",async({pag
 test("finance secretary can enter the admin portal and use mobile navigation",async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await signIn(page,"secretary@nusha.test",/\/admin$/);
+  await expect(page.getByRole("heading",{name:"Transaction activity",exact:true})).toBeVisible();
+  await page.setViewportSize({width:320,height:844});
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await page.setViewportSize({width:390,height:844});
+  const chartPeriod=page.getByRole("combobox",{name:"Chart period",exact:true});
+  await chartPeriod.selectOption("year");
+  await expect(chartPeriod).toHaveValue("year");
+  const month=page.getByRole("button",{name:/posted transactions/}).first();
+  await month.click();
+  await expect(month).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByRole("heading",{name:"Recent transactions",exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Open navigation"}).click();
   await page.getByRole("link",{name:"Transactions",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Transactions"})).toBeVisible();

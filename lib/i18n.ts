@@ -78,3 +78,18 @@ Object.assign(ml,{
   "Payment proof submitted for review.":"പേയ്മെന്റ് തെളിവ് പരിശോധനയ്ക്ക് സമർപ്പിച്ചു.",
   "Payment proof review saved.":"പേയ്മെന്റ് പരിശോധന സംരക്ഷിച്ചു.","Records will appear here when they’re available.":"രേഖകൾ ലഭ്യമാകുമ്പോൾ ഇവിടെ കാണാം.",
 });
+
+Object.assign(ml,{
+  "Track the union’s finances and review pending work.":"യൂണിയന്റെ സാമ്പത്തിക സ്ഥിതിയും അവശേഷിക്കുന്ന ജോലികളും പരിശോധിക്കുക.",
+  "Active academic year":"സജീവ അധ്യയന വർഷം","Apply academic year":"അധ്യയന വർഷം തിരഞ്ഞെടുക്കുക",
+  "Export CSV":"CSV എക്സ്പോർട്ട് ചെയ്യുക","Export transactions as CSV":"ഇടപാടുകൾ CSV ആയി എക്സ്പോർട്ട് ചെയ്യുക",
+  "Transaction activity":"ഇടപാടുകളുടെ പ്രവർത്തനം","Posted transactions by month":"ഓരോ മാസവും പോസ്റ്റ് ചെയ്ത ഇടപാടുകൾ",
+  "posted transactions":"പോസ്റ്റ് ചെയ്ത ഇടപാടുകൾ","Chart period":"ചാർട്ടിന്റെ കാലയളവ്","Recent months":"സമീപ മാസങ്ങൾ",
+  "No activity for this period":"ഈ കാലയളവിൽ പ്രവർത്തനമില്ല","Chart series":"ചാർട്ടിലെ വിവരങ്ങൾ",
+  "Cash flow":"പണമൊഴുക്ക്","Net cash flow":"അറ്റ പണമൊഴുക്ക്","Transaction trends":"ഇടപാടുകളുടെ പ്രവണത",
+  "Monthly income and expenses":"പ്രതിമാസ വരുമാനവും ചെലവും","Cash, bank, UPI and other accounts":"പണം, ബാങ്ക്, UPI, മറ്റു അക്കൗണ്ടുകൾ",
+  "View union accounts":"യൂണിയൻ അക്കൗണ്ടുകൾ കാണുക","View member dues":"അംഗങ്ങളുടെ കുടിശ്ശിക കാണുക",
+  "Payment proofs to review":"പരിശോധിക്കാനുള്ള പേയ്മെന്റ് തെളിവുകൾ","Department budgets":"വിഭാഗങ്ങളുടെ ബജറ്റുകൾ",
+  "View full ledger":"മുഴുവൻ കണക്കും കാണുക","Payments posted to your ledger":"നിങ്ങളുടെ കണക്കിൽ രേഖപ്പെടുത്തിയ പേയ്മെന്റുകൾ",
+  "Account menu":"അക്കൗണ്ട് മെനു","Your posted activity will appear here.":"നിങ്ങളുടെ പോസ്റ്റ് ചെയ്ത ഇടപാടുകൾ ഇവിടെ കാണാം.",
+});
